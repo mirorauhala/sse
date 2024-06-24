@@ -6,11 +6,13 @@ export default defineConfig({
   plugins: [react()],
 
   server: {
+    host: "localhost",
     port: 3000,
-    proxy: { "/api": "http://localhost:3000" },
+    proxy: { "/api": "http://127.0.0.1:3030" },
   },
   preview: {
+    host: "localhost",
     port: 3000,
-    proxy: { "/api": "http://localhost:3002" },
+    proxy: { "/api": "http://127.0.0.1:3030" },
   },
 });
