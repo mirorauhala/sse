@@ -15,95 +15,16 @@ type Message struct {
 	CreatedAt time.Time
 }
 
-func main() {
+var messages []Message
+var subscribers = make(map[chan Message]bool)
 
-	messages := []Message{
-		{
-			Id:        1,
-			CreatedAt: time.Now().Add(time.Minute * 1),
-			Body:      "Hello! How are you?",
-			Username:  "Alice",
-		},
-		{
-			Id:        2,
-			CreatedAt: time.Now().Add(time.Minute * 2),
-			Body:      "I'm doing well, thank you. How about you?",
-			Username:  "Bob",
-		},
-		{
-			Id:        3,
-			CreatedAt: time.Now().Add(time.Minute * 3),
-			Body:      "I'm good too. Just working on some projects.",
-			Username:  "Alice",
-		},
-		{
-			Id:        4,
-			CreatedAt: time.Now().Add(time.Minute * 4),
-			Body:      "Sounds interesting. What kind of projects?",
-			Username:  "Bob",
-		},
-		{
-			Id:        5,
-			CreatedAt: time.Now().Add(time.Minute * 5),
-			Body:      "I'm working on a new website design.",
-			Username:  "Alice",
-		},
-		{
-			Id:        6,
-			CreatedAt: time.Now().Add(time.Minute * 6),
-			Body:      "That's cool. Do you need any help with it?",
-			Username:  "Bob",
-		},
-		{
-			Id:        7,
-			CreatedAt: time.Now().Add(time.Minute * 7),
-			Body:      "Not at the moment, but I'll let you know if I do.",
-			Username:  "Alice",
-		},
-		{
-			Id:        8,
-			CreatedAt: time.Now().Add(time.Minute * 8),
-			Body:      "Sure, just give me a shout when you need assistance.",
-			Username:  "Bob",
-		},
-		{
-			Id:        9,
-			CreatedAt: time.Now().Add(time.Minute * 9),
-			Body:      "Thanks, Bob. I appreciate it.",
-			Username:  "Alice",
-		},
-		{
-			Id:        10,
-			CreatedAt: time.Now().Add(time.Minute * 10),
-			Body:      "No problem, that's what friends are for.",
-			Username:  "Bob",
-		},
-		{
-			Id:        11,
-			CreatedAt: time.Now().Add(time.Minute * 11),
-			Body:      "Hey, have you seen the latest movie release?",
-			Username:  "Alice",
-		},
-		{
-			Id:        12,
-			CreatedAt: time.Now().Add(time.Minute * 12),
-			Body:      "Not yet. Is it any good?",
-			Username:  "Bob",
-		},
-		{
-			Id:        13,
-			CreatedAt: time.Now().Add(time.Minute * 13),
-			Body:      "I heard it's amazing. We should go watch it together sometime.",
-			Username:  "Alice",
-		},
-		{
-			Id:        14,
-			CreatedAt: time.Now().Add(time.Minute * 14),
-			Body:      "That sounds like a plan. Let me know when you're free.",
-			Username:  "Bob",
-		},
+func notifySubscribers(newMessage Message) {
+	for subscriber := range subscribers {
+		subscriber <- newMessage
 	}
+}
 
+func main() {
 	server := http.NewServeMux()
 	server.HandleFunc("/api/messages", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Log", time.Now())
@@ -124,12 +45,27 @@ func main() {
 			}
 			defer r.Body.Close()
 
-			type Request 
+			type Request = struct {
+				Username string
+				Body     string
+			}
+
+			var message Request
 
 			err = json.Unmarshal(body, &message)
 
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			if len(message.Username) < 3 {
+				http.Error(w, "Username too short.", http.StatusBadRequest)
+				return
+			}
+
+			if len(message.Body) == 0 {
+				http.Error(w, "Body too short.", http.StatusBadRequest)
 				return
 			}
 
@@ -141,15 +77,17 @@ func main() {
 				}
 			}
 
-			messages = append(messages, Message{
+			newMessage := Message{
 				Id:        maxId + 1,
-				Body:      message.message,
-				Username:  "Miro",
+				Body:      message.Body,
+				Username:  message.Username,
 				CreatedAt: time.Now(),
-			})
+			}
 
-			// Respond with a success message
-			w.WriteHeader(http.StatusOK)
+			messages = append(messages, newMessage)
+			notifySubscribers(newMessage)
+
+			w.WriteHeader(http.StatusCreated)
 			w.Write([]byte("Successfully received JSON data"))
 
 		} else {
@@ -159,7 +97,29 @@ func main() {
 	})
 
 	server.HandleFunc("/api/subscribe", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("SSE endpoint"))
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+			return
+		}
+
+		subscriber := make(chan Message)
+		subscribers[subscriber] = true
+
+		defer func() {
+			delete(subscribers, subscriber)
+		}()
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		for newMessage := range subscriber {
+			data, _ := json.Marshal(newMessage)
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			flusher.Flush()
+		}
+
 	})
 
 	http.ListenAndServe("127.0.0.1:3030", server)
