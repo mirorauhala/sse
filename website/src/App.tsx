@@ -12,7 +12,7 @@ type Message = {
 
 export function App() {
   const [message, setMessage] = useState("");
-  const { data: messages, isLoading } = useQuery({
+  const { data: messages } = useQuery({
     queryKey: ["MESSAGES"],
     queryFn: () =>
       fetch("/api/messages").then((res) => res.json() as Promise<Message[]>),
@@ -69,18 +69,18 @@ export function App() {
   return (
     <div className="max-w-2xl mx-auto">
       <header className="py-4">
-        <h1 className="text-2xl tracking-tight py-1 font-medium">
+        <h1 className="text-2xl tracking-tight py-1 font-medium dark:text-white">
           Server-Sent-Events with Go
         </h1>
-        <p className="text-lg">
+        <p className="text-lg dark:text-white">
           Below is a simple chat app where messages come through SSE, but are
           sent with a normal POST request.
         </p>
       </header>
 
       <section>
-        <div className="h-96 bg-white border-2 border-stone-100 rounded-lg relative overflow-hidden">
-          <div className="absolute font-mono text-xs uppercase flex gap-2 bg-white opacity-80">
+        <div className="h-96 bg-white dark:bg-black border-2 dark:border-stone-800 border-stone-100 rounded-lg relative overflow-hidden">
+          <div className="absolute font-mono text-xs uppercase flex gap-2 bg-white/80 dark:bg-stone-800 dark:text-white/60">
             <p>scrollHeight: {messageArea?.current?.scrollHeight}</p>
             <p>scrollTop: {messageArea?.current?.scrollTop}</p>
             <p>clientHeight: {messageArea?.current?.clientHeight}</p>
@@ -99,7 +99,7 @@ export function App() {
                       className={clsx(
                         "py-1 px-3.5 rounded-full text-gray-800",
                         {
-                          "bg-stone-100 self-start":
+                          "bg-stone-100 dark:bg-stone-800 dark:text-white/80   self-start":
                             message.Username === "Alice",
                           "bg-blue-600 text-white self-end":
                             message.Username !== "Alice",
@@ -114,7 +114,7 @@ export function App() {
           </div>
 
           <form
-            className="w-full h-12 bottom-0 absolute p-2 backdrop-blur-lg bg-white/60 flex gap-2"
+            className="w-full h-12 bottom-0 absolute p-2 backdrop-blur-lg bg-white/60 dark:bg-stone-900 flex gap-2"
             onSubmit={(e) => {
               e.preventDefault();
               newMessage.mutate();
@@ -126,7 +126,7 @@ export function App() {
             <input
               type="text"
               placeholder="Message"
-              className="resize-none h-full w-full px-4 border rounded-full border-stone-200 focus-visible:outline-none bg-transparent focus-visible:bg-white transition-colors placeholder:text-black/40"
+              className="resize-none h-full w-full px-4 border rounded-full border-stone-200 dark:border-stone-700 focus-visible:outline-none bg-transparent focus-visible:bg-white dark:focus-visible:bg-stone-800 transition-colors placeholder:text-black/40 dark:placeholder:text-stone-500 dark:text-white"
               value={message}
               onChange={(e) => setMessage(e.currentTarget.value)}
             />
