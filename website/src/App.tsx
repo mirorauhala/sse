@@ -1,7 +1,58 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import clsx from "clsx";
-import { ArrowUpIcon } from "lucide-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  MutationFunction,
+  MutationOptions,
+  QueryFunction,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  UseQueryOptions,
+} from "@tanstack/react-query";
+
+const MESSAGE_KEY = ["MESSAGE"] as const;
+const MESSAGES_KEY = ["MESSAGES"] as const;
+type MESSAGES_KEY = typeof MESSAGES_KEY;
+
+const sendMessageFn: MutationFunction<void, Pick<Message, "Body">> = async (
+  message
+) => {
+  await fetch("/api/messages", {
+    method: "POST",
+    body: JSON.stringify({
+      Body: message.Body,
+    }),
+  });
+};
+
+const messageMutationOptions: MutationOptions<
+  void,
+  void,
+  Pick<Message, "Body">,
+  void
+> = {
+  mutationKey: MESSAGE_KEY,
+  mutationFn: sendMessageFn,
+  onError: (error) => console.error(error),
+};
+
+const getMessagesFn: QueryFunction<Message[], MESSAGES_KEY> = async ({
+  signal,
+}) =>
+  await fetch("/api/messages", { signal }).then(
+    (res) => res.json() as Promise<Message[]>
+  );
+
+const messagesQueryOptions: UseQueryOptions<
+  Message[],
+  void,
+  Message[],
+  MESSAGES_KEY
+> = {
+  queryKey: MESSAGES_KEY,
+  queryFn: getMessagesFn,
+  staleTime: Infinity,
+};
 
 type Message = {
   Id: number;
@@ -10,49 +61,40 @@ type Message = {
   CreatedAt: string;
 };
 
-export function App() {
-  const [message, setMessage] = useState("");
-  const { data: messages } = useQuery({
-    queryKey: ["MESSAGES"],
-    queryFn: () =>
-      fetch("/api/messages").then((res) => res.json() as Promise<Message[]>),
-  });
-  const messageArea = useRef<HTMLDivElement | null>(null);
+const useSubscription = () => {
   const queryClient = useQueryClient();
+  useEffect(() => {
+    const sse = new EventSource("/api/subscribe");
+    sse.addEventListener("error", () => console.log("error"));
+    sse.addEventListener("open", () => console.log("open"));
+    sse.addEventListener("message", (event) => {
+      console.log(event);
+      const data = JSON.parse(event.data);
+      queryClient.setQueriesData<Message[]>(
+        {
+          queryKey: MESSAGES_KEY,
+        },
+        (oldMessages) => {
+          if (!oldMessages) return [data];
+          return [...oldMessages, data];
+        }
+      );
+    });
 
-  const newMessage = useMutation({
-    mutationKey: ["MESSAGES"],
-    mutationFn: () =>
-      fetch("/api/messages", {
-        method: "POST",
-        body: JSON.stringify({
-          Message: message,
-        }),
-      }),
-    onMutate: () => {
-      const prev = queryClient.getQueryData(["MESSAGES"]);
-      queryClient.setQueryData(["MESSAGES"], (data) => {
-        const optimisticMessage = {
-          Id: Math.random() * 100,
-          Body: message,
-          Username: Math.random() > 0.5 ? "Miro" : "Alice",
-          CreatedAt: new Date().toISOString(),
-        };
-        if (!data) return [optimisticMessage] satisfies Message[];
+    return () => {
+      console.log("closing");
 
-        return [...(data as Message[]), optimisticMessage];
-      });
-      return { prev };
-    },
-    onError: (prev) => {
-      queryClient.setQueryData(["MESSAGES"], prev);
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["MESSAGES"],
-      });
-    },
-  });
+      sse.close();
+    };
+  }, [queryClient]);
+};
+
+export function App() {
+  useSubscription();
+  const { data: messages } = useQuery(messagesQueryOptions);
+  const messageArea = useRef<HTMLDivElement | null>(null);
+
+  const newMessage = useMutation(messageMutationOptions);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -117,20 +159,23 @@ export function App() {
             className="w-full h-12 bottom-0 absolute p-2 backdrop-blur-lg bg-white/60 dark:bg-stone-900 flex gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              newMessage.mutate();
+              const form = new FormData(e.currentTarget);
+              const bodyValue = form.get("body");
+              if (typeof bodyValue !== "string") return;
 
-              setMessage("");
+              newMessage.mutate({
+                Body: bodyValue,
+              });
               scrollToBottom();
             }}
           >
             <input
               type="text"
               placeholder="Message"
+              name="body"
               className="resize-none h-full w-full px-4 border rounded-full border-stone-200 dark:border-stone-700 focus-visible:outline-none bg-transparent focus-visible:bg-white dark:focus-visible:bg-stone-800 transition-colors placeholder:text-black/40 dark:placeholder:text-stone-500 dark:text-white"
-              value={message}
-              onChange={(e) => setMessage(e.currentTarget.value)}
             />
-            {message.length > 0 && (
+            {/* {message.length > 0 && (
               <button
                 className="h-6 w-6 bg-blue-500 flex items-center justify-center rounded-full absolute right-3 top-3 p-1"
                 type="submit"
@@ -140,7 +185,7 @@ export function App() {
                   strokeWidth="3"
                 />
               </button>
-            )}
+            )} */}
           </form>
         </div>
       </section>

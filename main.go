@@ -5,109 +5,28 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
+	"sync"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
-type Message struct {
-	Id        int
-	Username  string
-	Body      string
-	CreatedAt time.Time
-}
-
 func main() {
+	subs := make(map[int]*chan Message)
+	channelIdAcc := 1
+	var idAccMutex sync.Mutex
 
-	messages := []Message{
-		{
-			Id:        1,
-			CreatedAt: time.Now().Add(time.Minute * 1),
-			Body:      "Hello! How are you?",
-			Username:  "Alice",
-		},
-		{
-			Id:        2,
-			CreatedAt: time.Now().Add(time.Minute * 2),
-			Body:      "I'm doing well, thank you. How about you?",
-			Username:  "Bob",
-		},
-		{
-			Id:        3,
-			CreatedAt: time.Now().Add(time.Minute * 3),
-			Body:      "I'm good too. Just working on some projects.",
-			Username:  "Alice",
-		},
-		{
-			Id:        4,
-			CreatedAt: time.Now().Add(time.Minute * 4),
-			Body:      "Sounds interesting. What kind of projects?",
-			Username:  "Bob",
-		},
-		{
-			Id:        5,
-			CreatedAt: time.Now().Add(time.Minute * 5),
-			Body:      "I'm working on a new website design.",
-			Username:  "Alice",
-		},
-		{
-			Id:        6,
-			CreatedAt: time.Now().Add(time.Minute * 6),
-			Body:      "That's cool. Do you need any help with it?",
-			Username:  "Bob",
-		},
-		{
-			Id:        7,
-			CreatedAt: time.Now().Add(time.Minute * 7),
-			Body:      "Not at the moment, but I'll let you know if I do.",
-			Username:  "Alice",
-		},
-		{
-			Id:        8,
-			CreatedAt: time.Now().Add(time.Minute * 8),
-			Body:      "Sure, just give me a shout when you need assistance.",
-			Username:  "Bob",
-		},
-		{
-			Id:        9,
-			CreatedAt: time.Now().Add(time.Minute * 9),
-			Body:      "Thanks, Bob. I appreciate it.",
-			Username:  "Alice",
-		},
-		{
-			Id:        10,
-			CreatedAt: time.Now().Add(time.Minute * 10),
-			Body:      "No problem, that's what friends are for.",
-			Username:  "Bob",
-		},
-		{
-			Id:        11,
-			CreatedAt: time.Now().Add(time.Minute * 11),
-			Body:      "Hey, have you seen the latest movie release?",
-			Username:  "Alice",
-		},
-		{
-			Id:        12,
-			CreatedAt: time.Now().Add(time.Minute * 12),
-			Body:      "Not yet. Is it any good?",
-			Username:  "Bob",
-		},
-		{
-			Id:        13,
-			CreatedAt: time.Now().Add(time.Minute * 13),
-			Body:      "I heard it's amazing. We should go watch it together sometime.",
-			Username:  "Alice",
-		},
-		{
-			Id:        14,
-			CreatedAt: time.Now().Add(time.Minute * 14),
-			Body:      "That sounds like a plan. Let me know when you're free.",
-			Username:  "Bob",
-		},
-	}
+	SetupDb()
+	defer CloseDb()
 
 	server := http.NewServeMux()
 	server.HandleFunc("/api/messages", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("Log", time.Now())
 		if r.Method == http.MethodGet {
+			messages, err := GetMessages()
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
 			json, err := json.Marshal(messages)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -124,33 +43,26 @@ func main() {
 			}
 			defer r.Body.Close()
 
-			type Request 
-
+			var message Message
 			err = json.Unmarshal(body, &message)
-
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 
-			var maxId int
-
-			for _, message := range messages {
-				if message.Id > maxId {
-					maxId = message.Id
-				}
+			err = SaveMessage(&message)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
 			}
-
-			messages = append(messages, Message{
-				Id:        maxId + 1,
-				Body:      message.message,
-				Username:  "Miro",
-				CreatedAt: time.Now(),
-			})
 
 			// Respond with a success message
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("Successfully received JSON data"))
+
+			for _, sub := range subs {
+				(*sub) <- message
+			}
 
 		} else {
 			w.Header().Add("Allow", "GET, POST")
@@ -159,7 +71,34 @@ func main() {
 	})
 
 	server.HandleFunc("/api/subscribe", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("SSE endpoint"))
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		fmt.Println("Adding a sub to subs list")
+		mychan := make(chan Message)
+		idAccMutex.Lock()
+		channelIdAcc++
+		thisChannelsId := channelIdAcc
+		subs[thisChannelsId] = &mychan
+		idAccMutex.Unlock()
+
+		ctx := r.Context()
+
+		for {
+			select {
+			case msg := <-mychan:
+				json, err := json.Marshal(msg)
+				if err != nil {
+					fmt.Println("Error marshaling json")
+					return
+				}
+				fmt.Fprintf(w, "event: message\ndata: %s\n\n", json)
+				w.(http.Flusher).Flush()
+			case <-ctx.Done():
+				delete(subs, thisChannelsId)
+				return
+			}
+		}
 	})
 
 	http.ListenAndServe("127.0.0.1:3030", server)
