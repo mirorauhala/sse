@@ -1,36 +1,19 @@
+import { Conversation, conversationQueryOptions } from "@/routes/_chat";
+import { useQuery } from "@tanstack/react-query";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { useEffect, useState } from "react";
 
-type Conversation = {
-  id: number;
-  name: string;
-  preview: string;
-  date: string;
-};
-
-export const Navigation = () => {
+export const Conversations = ({
+  initialData,
+}: {
+  initialData: Conversation[];
+}) => {
+  const { data: conversations } = useQuery({
+    ...conversationQueryOptions,
+    initialData,
+  });
   const navigate = useNavigate();
   const matchRoute = useMatchRoute();
-
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-
-  useEffect(() => {
-    for (let index = 1; index < 10; index++) {
-      setConversations((convos) => [
-        ...convos,
-        {
-          id: index,
-          name: "Name",
-          preview:
-            "Lorem ipsum, dolor sit amet consectetur adipisicing elit. Illo, corporis cum? Sequi numquam, vel earum dolore saepe possimus laboriosam debitis iure illum reiciendis aspernatur modi harum perferendis minus perspiciatis adipisci?",
-          date: "Wednesday",
-        },
-      ]);
-    }
-
-    return () => setConversations([]);
-  }, []);
 
   return (
     <nav className="w-96 border-r dark:border-neutral-800 relative flex flex-col gap-2">
@@ -80,7 +63,7 @@ export const Navigation = () => {
                 className="flex flex-col w-full text-left px-2 py-1 hover:bg-neutral-100 focus-visible:bg-neutral-100 rounded-lg dark:hover:bg-neutral-800 dark:focus-visible:bg-neutral-800 select-none data-[active=true]:bg-blue-600 dark:data-[active=true]:hover:bg-blue-600 group"
               >
                 <div className="flex justify-between items-end w-full">
-                  <p className="text-sm font-medium dark:text-white">
+                  <p className="text-sm font-medium dark:text-white group-data-[active=true]:text-secondary">
                     {convo.name}
                   </p>
                   <p className="text-sm text-neutral-500 group-data-[active=true]:text-white/60">

@@ -71,6 +71,10 @@ func main() {
 	})
 
 	server.HandleFunc("/api/subscribe", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")                            // Allow all origins
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")          // Allow specific methods
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization") // Allow specific headers
+
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")

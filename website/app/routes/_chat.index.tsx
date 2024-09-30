@@ -1,20 +1,19 @@
+import { logOut } from "@/server/log-out";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useAuth } from "@/use-auth";
 
 export const Route = createFileRoute("/_chat/")({
   component: Index,
 });
 
 function Index() {
-  const { logout } = useAuth();
   const navigate = useNavigate();
 
   return (
     <>
       <button
-        onClick={() => {
+        onClick={async () => {
           console.log("Logging out");
-          logout();
+          await logOut();
           navigate({ to: "/auth" });
         }}
         className="w-6 h-6 bg-neutral-500 rounded-full absolute right-1 top-2"

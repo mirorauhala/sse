@@ -16,54 +16,20 @@ import {
 import { Button } from "app/components/ui/button";
 import { Input } from "app/components/ui/input";
 import { Label } from "@radix-ui/react-label";
-import { createServerFn } from "@tanstack/start";
-import auth from "@/foundation/auth";
-import { getEvent, setCookie } from "vinxi/http";
-import * as v from "valibot";
+import { signIn } from "@/server/sign-in";
+import { signUp } from "@/server/sign-up";
+import { getMe } from "@/server/get-me";
 
 export const Route = createFileRoute("/auth")({
   component: Index,
-  beforeLoad: ({ context }) => {
-    if (context.auth?.me) {
+  beforeLoad: async () => {
+    const me = await getMe();
+    if (me) {
       throw redirect({
         to: "/",
       });
     }
   },
-});
-
-const signUpSchema = v.pipe(
-  v.object({
-    email: v.pipe(v.string(), v.nonEmpty(), v.email()),
-    password: v.pipe(v.string(), v.minLength(8)),
-    verifyPassword: v.pipe(v.string(), v.minLength(8)),
-  }),
-  v.forward(
-    v.partialCheck(
-      [["password"], ["verifyPassword"]],
-      ({ password, verifyPassword }) => password === verifyPassword,
-      "The passwords do not match."
-    ),
-    ["verifyPassword"]
-  ),
-  v.transform(({ email, password }) => ({ email, password }))
-);
-
-export const signUp = createServerFn("POST", async (formData: FormData) => {
-  const validation = v.safeParse(
-    signUpSchema,
-    Object.fromEntries(formData.entries())
-  );
-
-  if (!validation.success) {
-    return v.flatten<typeof signUpSchema>(validation.issues);
-  }
-
-  const cookie = await auth.signUp(validation.output);
-
-  setCookie(getEvent(), cookie.name, cookie.value);
-
-  return true;
 });
 
 function Index() {
@@ -84,15 +50,19 @@ function Index() {
                 Connect with friends and explore new conversations.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent>
               <form
                 id="sign-in"
+                className="space-y-2"
                 onSubmit={async (event) => {
                   event.preventDefault();
                   const formData = new FormData(event.currentTarget);
-                  console.log("formData", formData);
-                  const response = await signUp(formData);
-                  console.log(response);
+                  const result = await signIn(formData);
+                  if (result) {
+                    navigate({
+                      to: "/",
+                    });
+                  }
                 }}
               >
                 <div className="space-y-1">
@@ -130,17 +100,16 @@ function Index() {
                 Connect with friends and explore new conversations.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent>
               <form
                 id="sign-up"
+                className="space-y-2"
                 onSubmit={async (event) => {
                   event.preventDefault();
                   const formData = new FormData(event.currentTarget);
                   const response = await signUp(formData);
                   if (response === true) {
-                    navigate({
-                      to: "/",
-                    });
+                    window.location.reload();
                     return;
                   }
 

@@ -3,16 +3,20 @@ import {
   Outlet,
   ScrollRestoration,
 } from "@tanstack/react-router";
-import type { ReactNode } from "react";
-import { AuthContext } from "@/auth";
+import { type ReactNode } from "react";
 import { Body, Head, Html, Meta, Scripts } from "@tanstack/start";
 import appCss from "@/index.css?url";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { TanStackRouterDevtools } from "@tanstack/router-devtools";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
-type RouterContext = {
-  auth?: AuthContext;
+type RouteContext = {
+  queryClient: QueryClient;
 };
 
-export const Route = createRootRouteWithContext<RouterContext>()({
+export const queryClient = new QueryClient();
+
+export const Route = createRootRouteWithContext<RouteContext>()({
   meta: () => [
     {
       charSet: "utf-8",
@@ -33,7 +37,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 function RootComponent() {
   return (
     <RootDocument>
-      <Outlet />
+      <QueryClientProvider client={queryClient}>
+        <Outlet />
+        <ReactQueryDevtools initialIsOpen={false} />
+      </QueryClientProvider>
+      <TanStackRouterDevtools />
     </RootDocument>
   );
 }

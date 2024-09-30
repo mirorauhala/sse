@@ -73,7 +73,6 @@ function ChatId() {
   });
   const { data: messages } = useQuery(messagesQueryOptions);
   const messageArea = useRef<HTMLDivElement | null>(null);
-
   const newMessage = useMutation(messageMutationOptions);
 
   const scrollToBottom = () => {
